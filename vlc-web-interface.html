@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLC Controller</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-weight: 300;
+            font-size: 2.5em;
+        }
+
+        .config-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .config-section h3 {
+            color: #555;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        input[type="text"], input[type="password"], input[type="file"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 15px 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(45deg, #f093fb, #f5576c);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, #4facfe, #00f2fe);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 172, 254, 0.4);
+        }
+
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .volume-slider {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.7);
+            border-left: 4px solid #667eea;
+        }
+
+        .hotkey-config {
+            margin-top: 20px;
+        }
+
+        .hotkey-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .hotkey-item:last-child {
+            border-bottom: none;
+        }
+
+        .hotkey-input {
+            width: 150px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .error {
+            color: #ff4757;
+            font-weight: 500;
+        }
+
+        .success {
+            color: #2ed573;
+            font-weight: 500;
+        }
+
+        @media (max-width: 600px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 VLC Controller</h1>
+        
+        <div class="config-section">
+            <h3>VLC Connection</h3>
+            <div class="input-group">
+                <label for="vlcUrl">VLC URL:</label>
+                <input type="text" id="vlcUrl" value="http://localhost:8080" placeholder="http://localhost:8080">
+            </div>
+            <div class="input-group">
+                <label for="vlcPassword">Password:</label>
+                <input type="password" id="vlcPassword" placeholder="Enter VLC password">
+            </div>
+            <button class="btn-success" onclick="testConnection()">Test Connection</button>
+        </div>
+
+        <div class="config-section">
+            <h3>Media File</h3>
+            <div class="input-group">
+                <label for="mediaPath">File Path:</label>
+                <input type="text" id="mediaPath" placeholder="/path/to/your/file.mp4">
+            </div>
+            <button class="btn-primary" onclick="playFile()">Play File</button>
+        </div>
+
+        <div class="config-section">
+            <h3>Playback Controls</h3>
+            <div class="controls">
+                <button class="btn-secondary" onclick="playPause()">⏯️ Play/Pause</button>
+                <button class="btn-secondary" onclick="stop()">⏹️ Stop</button>
+                <button class="btn-secondary" onclick="previous()">⏮️ Previous</button>
+                <button class="btn-secondary" onclick="next()">⏭️ Next</button>
+                <button class="btn-secondary" onclick="seekBackward()">⏪ -10s</button>
+                <button class="btn-secondary" onclick="seekForward()">⏩ +10s</button>
+            </div>
+            
+            <div class="volume-control">
+                <span>🔊</span>
+                <input type="range" class="volume-slider" id="volumeSlider" min="0" max="512" value="256" oninput="setVolume(this.value)">
+                <span id="volumeDisplay">100%</span>
+            </div>
+        </div>
+
+        <div class="config-section hotkey-config">
+            <h3>Keyboard Shortcuts (Browser Focus Required)</h3>
+            <div class="hotkey-item">
+                <span>Play/Pause:</span>
+                <input type="text" class="hotkey-input" id="playPauseKey" value="Space" readonly>
+            </div>
+            <div class="hotkey-item">
+                <span>Stop:</span>
+                <input type="text" class="hotkey-input" id="stopKey" value="s" readonly>
+            </div>
+            <div class="hotkey-item">
+                <span>Seek Forward:</span>
+                <input type="text" class="hotkey-input" id="seekForwardKey" value="ArrowRight" readonly>
+            </div>
+            <div class="hotkey-item">
+                <span>Seek Backward:</span>
+                <input type="text" class="hotkey-input" id="seekBackwardKey" value="ArrowLeft" readonly>
+            </div>
+            <small style="color: #666; display: block; margin-top: 10px;">
+                Note: Global hotkeys (when browser not focused) will be added later using system integration.
+            </small>
+        </div>
+
+        <div class="status" id="statusDisplay">
+            Ready to control VLC
+        </div>
+    </div>
+
+    <script>
+        // VLC API helper functions
+        async function vlcRequest(command, params = {}) {
+            const password = document.getElementById('vlcPassword').value;
+            
+            // Use CORS proxy instead of direct VLC connection
+            const proxyUrl = 'http://localhost:5000/vlc/requests/status.xml';
+            
+            // Build query string manually to avoid double encoding
+            let queryString = `command=${encodeURIComponent(command)}`;
+            for (const [key, value] of Object.entries(params)) {
+                queryString += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+            }
+            
+            const fullUrl = `${proxyUrl}?${queryString}`;
+            console.log('Making request to:', fullUrl);
+            console.log('With password:', password);
+            
+            try {
+                const response = await fetch(fullUrl, {
+                    headers: {
+                        'VLC-Password': password
+                    }
+                });
+                
+                console.log('Response status:', response.status);
+                console.log('Response headers:', [...response.headers.entries()]);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const text = await response.text();
+                console.log('VLC Response:', text);
+                updateStatus(`Command "${command}" executed successfully`, 'success');
+                return text;
+            } catch (error) {
+                console.error('VLC Request Error:', error);
+                updateStatus(`Error: ${error.message}`, 'error');
+                throw error;
+            }
+        }
+
+        // Control functions
+        async function testConnection() {
+            try {
+                await vlcRequest('');
+                updateStatus('Connection successful!', 'success');
+            } catch (error) {
+                updateStatus('Connection failed. Check URL and password.', 'error');
+            }
+        }
+
+        async function playFile() {
+            const filePath = document.getElementById('mediaPath').value;
+            if (!filePath) {
+                updateStatus('Please enter a file path', 'error');
+                return;
+            }
+            
+            try {
+                await vlcRequest('in_play', { input: `file://${filePath}` });
+                updateStatus(`Playing: ${filePath}`, 'success');
+            } catch (error) {
+                updateStatus('Failed to play file', 'error');
+            }
+        }
+
+        async function playPause() {
+            try {
+                await vlcRequest('pl_pause');
+            } catch (error) {
+                updateStatus('Failed to play/pause', 'error');
+            }
+        }
+
+        async function stop() {
+            try {
+                await vlcRequest('pl_stop');
+            } catch (error) {
+                updateStatus('Failed to stop', 'error');
+            }
+        }
+
+        async function previous() {
+            try {
+                await vlcRequest('pl_previous');
+            } catch (error) {
+                updateStatus('Failed to go to previous', 'error');
+            }
+        }
+
+        async function next() {
+            try {
+                await vlcRequest('pl_next');
+            } catch (error) {
+                updateStatus('Failed to go to next', 'error');
+            }
+        }
+
+        async function seekForward() {
+            try {
+                await vlcRequest('seek', { val: '+10' });
+            } catch (error) {
+                updateStatus('Failed to seek forward', 'error');
+            }
+        }
+
+        async function seekBackward() {
+            try {
+                await vlcRequest('seek', { val: '-10' });
+            } catch (error) {
+                updateStatus('Failed to seek backward', 'error');
+            }
+        }
+
+        async function setVolume(volume) {
+            try {
+                await vlcRequest('volume', { val: volume });
+                const percentage = Math.round((volume / 512) * 100);
+                document.getElementById('volumeDisplay').textContent = `${percentage}%`;
+            } catch (error) {
+                updateStatus('Failed to set volume', 'error');
+            }
+        }
+
+        // Utility functions
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusDisplay');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        // Keyboard shortcuts (only work when browser has focus)
+        document.addEventListener('keydown', function(event) {
+            // Prevent shortcuts when typing in input fields
+            if (event.target.tagName === 'INPUT') return;
+            
+            switch(event.code) {
+                case 'Space':
+                    event.preventDefault();
+                    playPause();
+                    break;
+                case 'KeyS':
+                    event.preventDefault();
+                    stop();
+                    break;
+                case 'ArrowRight':
+                    event.preventDefault();
+                    seekForward();
+                    break;
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    seekBackward();
+                    break;
+            }
+        });
+
+        // Save settings to localStorage
+        function saveSettings() {
+            const settings = {
+                vlcUrl: document.getElementById('vlcUrl').value,
+                vlcPassword: document.getElementById('vlcPassword').value,
+                mediaPath: document.getElementById('mediaPath').value
+            };
+            localStorage.setItem('vlcControllerSettings', JSON.stringify(settings));
+        }
+
+        // Load settings from localStorage
+        function loadSettings() {
+            const savedSettings = localStorage.getItem('vlcControllerSettings');
+            if (savedSettings) {
+                const settings = JSON.parse(savedSettings);
+                document.getElementById('vlcUrl').value = settings.vlcUrl || 'http://localhost:8080';
+                document.getElementById('vlcPassword').value = settings.vlcPassword || '';
+                document.getElementById('mediaPath').value = settings.mediaPath || '';
+            }
+        }
+
+        // Auto-save settings on change
+        document.getElementById('vlcUrl').addEventListener('change', saveSettings);
+        document.getElementById('vlcPassword').addEventListener('change', saveSettings);
+        document.getElementById('mediaPath').addEventListener('change', saveSettings);
+
+        // Load settings on page load
+        window.addEventListener('load', loadSettings);
+    </script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+# Ignore media directory
+media/
+
+# Common Python ignores
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+.env
+
+# IDE files
+.vscode/settings.json
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
