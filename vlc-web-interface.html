@@ -127,6 +127,16 @@
             box-shadow: 0 10px 20px rgba(79, 172, 254, 0.4);
         }
 
+        .btn-info {
+            background: linear-gradient(45deg, #fa709a, #fee140);
+            color: white;
+        }
+
+        .btn-info:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(250, 112, 154, 0.4);
+        }
+
         .volume-control {
             display: flex;
             align-items: center;
@@ -195,6 +205,32 @@
             font-weight: 500;
         }
 
+        .timecode-display {
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 24px;
+            font-weight: bold;
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border: 2px solid #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+        }
+
+        .timecode-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .timecode-controls button {
+            flex: 1;
+            padding: 10px;
+            font-size: 14px;
+        }
+
         @media (max-width: 600px) {
             .controls {
                 grid-template-columns: 1fr;
@@ -202,6 +238,10 @@
             
             .container {
                 padding: 20px;
+            }
+
+            .timecode-controls {
+                flex-direction: column;
             }
         }
     </style>
@@ -230,6 +270,20 @@
                 <input type="text" id="mediaPath" placeholder="/path/to/your/file.mp4">
             </div>
             <button class="btn-primary" onclick="playFile()">Play File</button>
+        </div>
+
+        <div class="config-section">
+            <h3>Timecode Display</h3>
+            <div class="timecode-display" id="timecodeDisplay">
+                --:--:-- / --:--:--
+            </div>
+            <div class="timecode-controls">
+                <button class="btn-info" onclick="getTimecode()">🕐 Get Time</button>
+                <button class="btn-info" onclick="toggleAutoUpdate()">🔄 Auto Update</button>
+            </div>
+            <small style="color: #666; display: block; margin-top: 10px;">
+                Auto update refreshes timecode every second when enabled
+            </small>
         </div>
 
         <div class="config-section">
@@ -268,6 +322,10 @@
                 <span>Seek Backward:</span>
                 <input type="text" class="hotkey-input" id="seekBackwardKey" value="ArrowLeft" readonly>
             </div>
+            <div class="hotkey-item">
+                <span>Get Timecode:</span>
+                <input type="text" class="hotkey-input" id="timecodeKey" value="t" readonly>
+            </div>
             <small style="color: #666; display: block; margin-top: 10px;">
                 Note: Global hotkeys (when browser not focused) will be added later using system integration.
             </small>
@@ -279,6 +337,10 @@
     </div>
 
     <script>
+        // Global variables for timecode functionality
+        let autoUpdateInterval = null;
+        let isAutoUpdateEnabled = false;
+
         // VLC API helper functions
         async function vlcRequest(command, params = {}) {
             const password = document.getElementById('vlcPassword').value;
@@ -293,8 +355,6 @@
             }
             
             const fullUrl = `${proxyUrl}?${queryString}`;
-            console.log('Making request to:', fullUrl);
-            console.log('With password:', password);
             
             try {
                 const response = await fetch(fullUrl, {
@@ -303,21 +363,130 @@
                     }
                 });
                 
-                console.log('Response status:', response.status);
-                console.log('Response headers:', [...response.headers.entries()]);
-                
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
                 
                 const text = await response.text();
-                console.log('VLC Response:', text);
                 updateStatus(`Command "${command}" executed successfully`, 'success');
                 return text;
             } catch (error) {
                 console.error('VLC Request Error:', error);
                 updateStatus(`Error: ${error.message}`, 'error');
                 throw error;
+            }
+        }
+
+        // Silent VLC request (no console logs for auto-updates)
+        async function vlcRequestSilent(command, params = {}) {
+            const password = document.getElementById('vlcPassword').value;
+            const proxyUrl = 'http://localhost:5000/vlc/requests/status.xml';
+            
+            let queryString = `command=${encodeURIComponent(command)}`;
+            for (const [key, value] of Object.entries(params)) {
+                queryString += `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+            }
+            
+            const fullUrl = `${proxyUrl}?${queryString}`;
+            
+            try {
+                const response = await fetch(fullUrl, {
+                    headers: {
+                        'VLC-Password': password
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                return await response.text();
+            } catch (error) {
+                throw error;
+            }
+        }
+
+        // Parse VLC status XML to extract time information
+        function parseVLCStatus(xmlText) {
+            try {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                
+                // Get time in seconds
+                const timeElement = xmlDoc.querySelector('time');
+                const lengthElement = xmlDoc.querySelector('length');
+                
+                const currentTime = timeElement ? parseInt(timeElement.textContent) : 0;
+                const totalLength = lengthElement ? parseInt(lengthElement.textContent) : 0;
+                
+                return {
+                    currentTime: currentTime,
+                    totalLength: totalLength,
+                    currentTimeFormatted: formatTime(currentTime),
+                    totalLengthFormatted: formatTime(totalLength)
+                };
+            } catch (error) {
+                console.error('Error parsing VLC status:', error);
+                return {
+                    currentTime: 0,
+                    totalLength: 0,
+                    currentTimeFormatted: '--:--:--',
+                    totalLengthFormatted: '--:--:--'
+                };
+            }
+        }
+
+        // Format seconds to HH:MM:SS
+        function formatTime(seconds) {
+            if (!seconds || seconds < 0) return '--:--:--';
+            
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = Math.floor(seconds % 60);
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        // Get and display current timecode
+        async function getTimecode(silent = false) {
+            try {
+                const xmlResponse = silent ? await vlcRequestSilent('') : await vlcRequest('');
+                const timeInfo = parseVLCStatus(xmlResponse);
+                
+                const timecodeDisplay = document.getElementById('timecodeDisplay');
+                timecodeDisplay.textContent = `${timeInfo.currentTimeFormatted} / ${timeInfo.totalLengthFormatted}`;
+                
+                if (!silent) {
+                    updateStatus(`Current time: ${timeInfo.currentTimeFormatted}`, 'success');
+                }
+            } catch (error) {
+                if (!silent) {
+                    updateStatus('Failed to get timecode', 'error');
+                }
+                document.getElementById('timecodeDisplay').textContent = '--:--:-- / --:--:--';
+            }
+        }
+
+        // Toggle auto-update functionality
+        function toggleAutoUpdate() {
+            const button = event.target;
+            
+            if (isAutoUpdateEnabled) {
+                // Stop auto update
+                clearInterval(autoUpdateInterval);
+                autoUpdateInterval = null;
+                isAutoUpdateEnabled = false;
+                button.textContent = '🔄 Auto Update';
+                button.style.background = 'linear-gradient(45deg, #fa709a, #fee140)';
+                updateStatus('Auto update disabled', 'info');
+            } else {
+                // Start auto update
+                autoUpdateInterval = setInterval(getTimecode, 1000);
+                isAutoUpdateEnabled = true;
+                button.textContent = '⏸️ Stop Auto';
+                button.style.background = 'linear-gradient(45deg, #ff6b6b, #ee5a24)';
+                updateStatus('Auto update enabled (updates every 1 second)', 'success');
+                getTimecode(); // Get initial time immediately
             }
         }
 
@@ -341,6 +510,9 @@
             try {
                 await vlcRequest('in_play', { input: `file://${filePath}` });
                 updateStatus(`Playing: ${filePath}`, 'success');
+                
+                // Get timecode after starting playback
+                setTimeout(getTimecode, 1000);
             } catch (error) {
                 updateStatus('Failed to play file', 'error');
             }
@@ -349,6 +521,8 @@
         async function playPause() {
             try {
                 await vlcRequest('pl_pause');
+                // Update timecode after play/pause
+                setTimeout(getTimecode, 500);
             } catch (error) {
                 updateStatus('Failed to play/pause', 'error');
             }
@@ -357,6 +531,8 @@
         async function stop() {
             try {
                 await vlcRequest('pl_stop');
+                // Reset timecode display when stopped
+                document.getElementById('timecodeDisplay').textContent = '--:--:-- / --:--:--';
             } catch (error) {
                 updateStatus('Failed to stop', 'error');
             }
@@ -365,6 +541,7 @@
         async function previous() {
             try {
                 await vlcRequest('pl_previous');
+                setTimeout(getTimecode, 1000);
             } catch (error) {
                 updateStatus('Failed to go to previous', 'error');
             }
@@ -373,6 +550,7 @@
         async function next() {
             try {
                 await vlcRequest('pl_next');
+                setTimeout(getTimecode, 1000);
             } catch (error) {
                 updateStatus('Failed to go to next', 'error');
             }
@@ -381,6 +559,7 @@
         async function seekForward() {
             try {
                 await vlcRequest('seek', { val: '+10' });
+                setTimeout(getTimecode, 500);
             } catch (error) {
                 updateStatus('Failed to seek forward', 'error');
             }
@@ -389,6 +568,7 @@
         async function seekBackward() {
             try {
                 await vlcRequest('seek', { val: '-10' });
+                setTimeout(getTimecode, 500);
             } catch (error) {
                 updateStatus('Failed to seek backward', 'error');
             }
@@ -424,6 +604,10 @@
                 case 'KeyS':
                     event.preventDefault();
                     stop();
+                    break;
+                case 'KeyT':
+                    event.preventDefault();
+                    getTimecode();
                     break;
                 case 'ArrowRight':
                     event.preventDefault();
@@ -464,6 +648,13 @@
 
         // Load settings on page load
         window.addEventListener('load', loadSettings);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', function() {
+            if (autoUpdateInterval) {
+                clearInterval(autoUpdateInterval);
+            }
+        });
     </script>
 </body>
 </html>
