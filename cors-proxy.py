@@ -5,12 +5,15 @@ import urllib.request
 import urllib.parse
 from urllib.error import URLError
 import base64
+import sys
+import os
 
 class CORSHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         if self.path.startswith('/vlc/'):
             vlc_path = self.path[5:]
-            vlc_url = f"http://localhost:8080/{vlc_path}"
+            vlc_port = os.environ.get('VLC_PORT', '8080')
+            vlc_url = f"http://localhost:{vlc_port}/{vlc_path}"
             
             try:
                 vlc_password = self.headers.get('VLC-Password', '')

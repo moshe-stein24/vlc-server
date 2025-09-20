@@ -8,6 +8,7 @@ set -e  # Exit on any error
 VLC_DIR="$(pwd)"
 VENV_DIR="$VLC_DIR/vlc-env"
 VLC_PASSWORD="test123"
+VLC_PORT=8080
 
 # Colors for output
 RED='\033[0;31m'
@@ -29,7 +30,53 @@ port_in_use() {
     netstat -tuln 2>/dev/null | grep -q ":$1 "
 }
 
-# Function to kill processes on specific ports
+# Function to find next available port
+find_next_port() {
+    local start_port=$1
+    local port=$start_port
+    while port_in_use $port; do
+        ((port++))
+    done
+    echo $port
+}
+
+# Function to ask permission and handle port conflicts
+handle_port_conflict() {
+    local port=$1
+    local service_name=$2
+    
+    if port_in_use $port; then
+        echo -e "${YELLOW}⚠️  Port $port is in use by another process.${NC}" >&2
+        echo -e "${BLUE}Options:${NC}" >&2
+        echo "  1) Kill the process and use port $port" >&2
+        echo "  2) Use a different port" >&2
+        read -p "Choose option (1 or 2): " choice >&2
+        
+        case $choice in
+            1)
+                echo -e "${YELLOW}🔪 Killing processes on port $port...${NC}" >&2
+                sudo lsof -ti:$port | xargs sudo kill -9 2>/dev/null || true
+                sleep 1
+                echo $port
+                ;;
+            2)
+                local next_port=$(find_next_port $((port + 1)))
+                echo -e "${GREEN}✅ Using port $next_port instead${NC}" >&2
+                echo $next_port
+                ;;
+            *)
+                echo -e "${RED}❌ Invalid choice. Using next available port.${NC}" >&2
+                local next_port=$(find_next_port $((port + 1)))
+                echo -e "${GREEN}✅ Using port $next_port instead${NC}" >&2
+                echo $next_port
+                ;;
+        esac
+    else
+        echo $port
+    fi
+}
+
+# Function to kill processes on specific ports (legacy - kept for other services)
 kill_port() {
     local port=$1
     echo -e "${YELLOW}🔍 Checking port $port...${NC}"
@@ -69,9 +116,9 @@ fi
 
 echo -e "${GREEN}✅ Dependencies OK${NC}"
 
-# Step 2: Clean up any existing processes
-echo -e "\n${BLUE}🧹 Cleaning up existing processes...${NC}"
-kill_port 8080  # VLC
+# Step 2: Handle VLC port and clean up other processes
+echo -e "\n${BLUE}🧹 Handling port conflicts...${NC}"
+VLC_PORT=$(handle_port_conflict $VLC_PORT "VLC HTTP Interface")
 kill_port 5000  # CORS proxy  
 kill_port 3000  # Web server
 pkill -f "vlc.*http" 2>/dev/null || true
@@ -92,19 +139,19 @@ echo -e "${YELLOW}📦 Installing/updating Python packages...${NC}"
 pip install --quiet requests keyboard
 
 # Step 4: Start VLC with HTTP interface
-echo -e "\n${BLUE}🎬 Starting VLC with HTTP interface...${NC}"
-vlc --intf dummy --extraintf http --http-password "$VLC_PASSWORD" &
+echo -e "\n${BLUE}🎬 Starting VLC with HTTP interface on port $VLC_PORT...${NC}"
+vlc --intf dummy --extraintf http --http-password "$VLC_PASSWORD" --http-port $VLC_PORT &
 VLC_PID=$!
 
 # Wait for VLC to start
 sleep 3
 
 # Check if VLC started successfully
-if ! port_in_use 8080; then
-    echo -e "${RED}❌ VLC failed to start on port 8080${NC}"
+if ! port_in_use $VLC_PORT; then
+    echo -e "${RED}❌ VLC failed to start on port $VLC_PORT${NC}"
     exit 1
 fi
-echo -e "${GREEN}✅ VLC started (PID: $VLC_PID)${NC}"
+echo -e "${GREEN}✅ VLC started on port $VLC_PORT (PID: $VLC_PID)${NC}"
 
 # Step 5: Start CORS proxy
 echo -e "\n${BLUE}🌐 Starting CORS proxy...${NC}"
@@ -114,7 +161,7 @@ if [ ! -f "cors-proxy.py" ]; then
     exit 1
 fi
 
-python3 cors-proxy.py &
+VLC_PORT=$VLC_PORT python3 cors-proxy.py &
 PROXY_PID=$!
 sleep 2
 
@@ -155,7 +202,7 @@ fi
 echo -e "\n${GREEN}🎉 VLC Web Controller is now running!${NC}"
 echo "=========================================="
 echo -e "${BLUE}📊 Service Status:${NC}"
-echo -e "  VLC HTTP Interface:  ${GREEN}http://localhost:8080${NC} (password: $VLC_PASSWORD)"
+echo -e "  VLC HTTP Interface:  ${GREEN}http://localhost:$VLC_PORT${NC} (password: $VLC_PASSWORD)"
 echo -e "  CORS Proxy:          ${GREEN}http://localhost:5000${NC}"
 echo -e "  Web Interface:       ${GREEN}http://localhost:3000/vlc-web-interface.html${NC}"
 if [ -n "$HOTKEYS_PID" ]; then
